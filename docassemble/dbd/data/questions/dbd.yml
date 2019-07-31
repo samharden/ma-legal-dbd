@@ -1,0 +1,1164 @@
+objects: 
+  - client: Individual
+  - children: DADict.using(there_are_any=True, object_type=DAObject, complete_attribute='live_with')
+  - ind_household: DADict.using(there_are_any=True, object_type=DAObject, complete_attribute='month_contrib')
+  - employer: Person
+  - spouse_employer: Person
+  - vehicles: DADict.using(there_are_any=True, object_type=DAObject, complete_attribute='current_value')
+  - realprop: DADict.using(there_are_any=True, object_type=DAObject, complete_attribute='current_value')
+  - bankact: DADict.using(there_are_any=True, object_type=DAObject, complete_attribute='act_type')
+  - retirement_acts: DADict.using(there_are_any=True, object_type=DAObject, complete_attribute='balance')
+  - securities: DADict.using(there_are_any=True, object_type=DAObject, complete_attribute='cur_val')
+  - credit_cards: DADict.using(there_are_any=True, object_type=DAObject, complete_attribute='total_amt_owed')
+---
+---
+modules:
+  - docassemble.ssa.ssa
+---
+features:
+  javascript: docassemble.ssa:ssa.js
+---
+question: |
+  What is your name?
+fields: 
+  - First: client.name.first
+  - Middle: client.name.middle
+    required: False
+  - Last: client.name.last
+---
+question: |
+  What is your current address?
+fields: 
+  - Street Address: client.address.address
+  - City: client.address.city
+  - State: client.address.state
+    code: states_list()
+  - Zip Code: client.address.zip
+---
+question: |
+  Do you rent or own ${ client.address.address }?
+fields: 
+  - no label: client.address.type
+    choices: 
+      - Rent
+      - Own
+      - Other
+  - Please specify the type of residence: client.address.type_specify
+    required: False
+    show if: 
+      variable: 
+        client.address.type
+      is: 
+        'Other'
+---
+question: |
+  How long have you lived at ${ client.address.address }?
+fields: 
+  - Months: client.address.month
+  - Years: client.address.years
+---
+question: |
+  What is your email address, home phone number, and cell phone number?
+fields: 
+  - Email: client.email
+    datatype: email
+  - Home Phone: client.homephone
+    required: false
+  - Cell Phone: client.cellphone
+    required: false
+---
+question: |
+  What is your Social Security Number and date of birth?
+fields: 
+  - SSN: client.ssn
+    datatype: ssn
+    validate: is_valid_ssn
+  - Drivers license number: client.dl
+    required: false
+  - Date of Birth: client.birthdate
+    datatype: date
+    
+---
+question: |
+  Are you currently married?
+fields: 
+  - no label: client.marital_status
+    choices: 
+      - Yes
+      - No
+  - Spouse Name: client.spouse_name
+    show if: 
+      variable: 
+        client.marital_status
+      is: 
+        "Yes"
+  - Spouse DOB: client.spouse_birthdate
+    datatype: date
+    show if: 
+      variable: 
+        client.marital_status
+      is: 
+        "Yes"
+---
+question: |
+  Take out the Notice of Arrears that you received from the DOR.
+subquestion: |
+  It looks like this: 
+  What is the total amount you should be paying according to the Notice 
+  of Arrears, and how often should you be paying it?
+fields: 
+  - Total amount: total_support
+    datatype: currency
+  - Every: total_support_freq
+    choices: 
+      - Week: Weekly
+      - Month: Monthly
+---
+question: |
+  Now we're going to talk about the amount of past-due child support as well as
+  add the children you pay support for one-by-one.
+buttons:
+  - Get Started:
+      code: |
+        haschildren = True
+---
+code: |
+  if haschildren == True:
+    children.there_are_any=True
+    children.new_item_name = len(children)
+  else: 
+    children.there_are_any=False
+    
+
+---
+
+question: |
+  Please complete the following about the ${ ordinal(i) } child:
+  <%
+    children[i].pay_support = True
+    children[i].support_freq = total_support_freq
+    
+  %>
+fields:
+  - Name: children[i].name
+  - Date of Birth: children[i].birthdate
+    datatype: date
+  - Does this child live with you?: children[i].live_with
+    choices: 
+      - Yes
+      - No
+
+
+---
+
+question: |
+  Would you like to add another child?
+subquestion: |
+  So far you have added these children: 
+  
+  Name   |DOB   |Do they live with you
+  -------|------|-----------
+  % for chld in children:
+  ${ children.item(chld).name } | ${ children.item(chld).birthdate } | ${ children.item(chld).live_with } 
+  % endfor
+yesno: children.there_is_another
+---
+code: |
+  if children.there_is_another == False:
+    div_amt = total_support / len(children)
+    
+---
+question: |
+  Do any other individuals live in your household?
+yesno: hasindividual
+
+---
+code: |
+  if hasindividual == True:
+    ind_household.there_are_any=True
+    ind_household.new_item_name = len(ind_household)
+  else: 
+    ind_household.there_are_any=False
+
+---
+
+question: |
+  Please complete the following about the ${ ordinal(i) } individual:
+fields:
+  - Name: ind_household[i].name
+  - What is their relationship to you?: ind_household[i].relationship
+  - Do they contribute to household expenses?: ind_household[i].month_contrib
+    datatype: yesnoradio
+  - How much?: ind_household[i].month_contrib_amt
+    datatype: currency
+    show if: 
+      variable: 
+        ind_household[i].month_contrib
+      is: 
+        True
+---
+
+question: |
+  Would you like to add another individual who lives with you?
+subquestion: |
+  So far you have added these individuals: 
+  
+  Name   |Relationship   |Do they contribute to household expenses?   |How much?
+  -------|---------------|--------------------------------------------|-----------
+  % for ind in ind_household:
+  % if ind_household.item(ind).month_contrib == True:
+  ${ ind_household.item(ind).name } | ${ ind_household.item(ind).relationship } | Yes | ${ ind_household.item(ind).month_contrib_amt }
+  % else: 
+  ${ ind_household.item(ind).name } | ${ ind_household.item(ind).relationship } | No | N/A
+  % endif
+  % endfor  
+  
+yesno: ind_household.there_is_another
+---
+question: |
+  Are you currently employed?
+fields: 
+  - no label: client_is_employed
+    datatype: yesnoradio
+  - Employer Name: employer.name.text
+    show if:
+      variable: 
+        client_is_employed
+      is: 
+        True
+  - Employer Address: employer.address.address
+    show if:
+      variable: 
+        client_is_employed
+      is: 
+        True
+  - City: employer.address.city
+    show if:
+      variable: 
+        client_is_employed
+      is: 
+        True
+  - State: employer.address.state
+    code: 
+      states_list()
+    show if:
+      variable: 
+        client_is_employed
+      is: 
+        True        
+  - Zip: employer.address.zip
+    datatype: integer
+    show if:
+      variable: 
+        client_is_employed
+      is: 
+        True      
+  - Phone: employer.phone
+    show if:
+      variable: 
+        client_is_employed
+      is: 
+        True  
+  - Occupation: employer.occupation
+    show if:
+      variable: 
+        client_is_employed
+      is: 
+        True  
+  - Employed from: employer.from_date
+    datatype: date
+    show if:
+      variable: 
+        client_is_employed
+      is: 
+        True
+  - Employed to: employer.from_date
+    show if:
+      variable: 
+        client_is_employed
+      is: 
+        True
+    choices: 
+      - Present
+      - Date
+  - On what date did your employment end?: employer.from_date_d
+    datatype: date
+    show if: 
+      variable: 
+        employer.from_date
+      is: 
+        'Date'
+  - Are you self-employed?: employer.self
+    choices: 
+      - Yes
+      - No
+    show if:
+      variable: 
+        client_is_employed
+      is: 
+        True   
+---
+
+---
+if: |
+  client.marital_status == "Yes"
+question: |
+  Is your spouse employed?
+fields: 
+  - no label: is_spouse_employed
+    datatype: yesnoradio
+  - Spouse's Employer: spouse_employer.name
+    show if: 
+      variable:
+        is_spouse_employed
+      is: 
+        True
+  - Employer Address: spouse_employer.address.address
+    show if: 
+      variable:
+        is_spouse_employed
+      is: 
+        True        
+  - City: spouse_employer.address.city
+    show if: 
+      variable:
+        is_spouse_employed
+      is: 
+        True
+  - State: spouse_employer.address.state
+    code: 
+      states_list()
+    show if: 
+      variable:
+        is_spouse_employed
+      is: 
+        True
+  - Zip: spouse_employer.address.zip
+    datatype: integer
+    show if: 
+      variable:
+        is_spouse_employed
+      is: 
+        True
+---
+if: |
+  client.marital_status == "Yes"
+question : |
+  Does your spouse have a monthly income source 
+  % if is_spouse_employed == True:
+  other than employment with ${spouse_employer.name}?
+  % else: 
+  ?
+  % endif
+fields: 
+  - no label: spouse_has_other_income_source 
+    datatype: yesnoradio
+  - What source?: spouse_monthly_income_source
+    show if: 
+      variable: 
+        spouse_has_other_income_source
+      is: 
+        True
+---
+if: |
+  client.marital_status == "Yes"
+question: |
+  What is your spouse's monthly income from all sources
+  % if is_spouse_employed == True and spouse_has_other_income_source:
+  including employment with ${spouse_employer.name} and from ${spouse_monthly_income_source}?
+  % elif is_spouse_employed == True:
+  including employment with ${spouse_employer.name}?
+  % elif is_spouse_employed == True:
+  including ${spouse_monthly_income_source}?
+  % else: 
+  ?
+  % endif
+fields: 
+  - Monthly Income: spouse_monthly_income
+    datatype: currency
+
+---
+---
+question: |
+  Do you own or lease any vehicles?
+yesno: hasvehicles
+
+---
+code: |
+  if hasvehicles == True:
+    vehicles.there_are_any=True
+    vehicles.new_item_name = len(vehicles)
+  else: 
+    vehicles.there_are_any=False
+---
+
+question: |
+  Please complete the following about the ${ ordinal(i) } vehicle:
+fields:
+  - Description: vehicles[i].description
+    required: False
+  - Make: vehicles[i].make
+    choices: 
+      - Ford
+      - GM
+      - Honda
+      - Subaru
+  - Model: vehicles[i].model
+  - Year: vehicles[i].year
+  - Own or Lease?: vehicles[i].own_lease
+    choices: 
+      - Own
+      - Lease
+  - License Plate Number: vehicles[i].license_plate
+    required: False
+  - Current Value: vehicles[i].current_value
+    datatype: currency
+  - Amount Owed on Loan: vehicles[i].amt_owed
+    required: False
+    datatype: currency
+   
+---
+question: |
+  Would you like to add another vehicle?
+subquestion: |
+  So far you have added these vehicles: 
+  
+  Description   |Make   |Model  |Year  |Own or Lease  |Plate Number  |Current Value  |Amount Owed
+  --------------|-------|-------|------|--------------|--------------|---------------|-------------
+  % for veh in vehicles:
+  ${ vehicles.item(veh).description } | ${ vehicles.item(veh).make } | ${ vehicles.item(veh).model } | ${ vehicles.item(veh).year } | ${ vehicles.item(veh).own_lease } | ${ vehicles.item(veh).license_plate } | ${ vehicles.item(veh).current_value } | ${ vehicles.item(veh).amt_owed }
+  % endfor  
+  
+yesno: vehicles.there_is_another
+---
+question: |
+  Do you rent a safe deposit box?
+fields: 
+  - no label: has_safe_deposit_box
+    choices: 
+      - Yes
+      - No
+  - Location of safe deposit box: safe_deposit_location
+    required: false
+    show if: 
+      variable: 
+        has_safe_deposit_box
+      is: 
+        'Yes'
+  - Safe deposit box number: safe_deposit_number
+    required: false
+    show if: 
+      variable: 
+        has_safe_deposit_box
+      is: 
+        'Yes'
+  - Contents of safe deposit box: safe_deposit_contents
+    required: false
+    show if: 
+      variable: 
+        has_safe_deposit_box
+      is: 
+        'Yes'  
+---
+question: |
+  How much cash do you currently have on-hand?
+fields:
+  - no label: cash_on_hand
+    datatype: currency
+---
+---
+---
+question: |
+  Do you own any real property?
+yesno: hasprop
+
+---
+code: |
+  if hasprop == True:
+    realprop.there_are_any=True
+    realprop.new_item_name = len(realprop)
+  else: 
+    realprop.there_are_any=False
+---
+
+question: |
+  Please complete the following about the ${ ordinal(i) } piece of real property:
+fields:
+  - Description: realprop[i].description
+    required: False
+  - Street address: realprop[i].address
+  - City: realprop[i].city
+  - State: realprop[i].state
+    code: 
+      states_list()
+  - Zip code: realprop[i].zip
+  - Current market value: realprop[i].current_value
+    datatype: currency
+  - Amount owed on mortgage: realprop[i].amt_owed
+    required: False
+    datatype: currency
+  - Amount of equity in property: realprop[i].equity
+    required: False
+    datatype: currency
+---
+question: |
+  Would you like to add another piece of real property?
+subquestion: |
+  So far you have added these properties: 
+  
+  Description   |Address   |City  |State  |Zip  |Current Value |Amount Owed  |Equity
+  --------------|----------|------|-------|-----|--------------|-------------|-------
+  % for pro in realprop:
+  ${ realprop.item(pro).description } | ${ realprop.item(pro).address } | ${ realprop.item(pro).city } | ${ realprop.item(pro).state } | ${ realprop.item(pro).zip } | ${ realprop.item(pro).current_value } | ${ realprop.item(pro).amt_owed } | ${ realprop.item(pro).equity }
+  % endfor  
+yesno: realprop.there_is_another
+---
+question: |
+  Is a foreclosure proceeding pending on any real estate that you own or 
+  have an interest in?
+fields: 
+  - no label: forclosure_yesno
+    choices:
+      - Yes
+      - No
+---
+question: |
+  Do you have any bank accounts?
+subquestion: |
+  Please answer yes if you have any savings, checking, certificates of deposit, or 
+  money market accounts. 
+yesno: hasbank
+
+---
+code: |
+  if hasbank == True:
+    bankact.there_are_any=True
+    bankact.new_item_name = len(bankact)
+  else: 
+    bankact.there_are_any=False
+---
+
+question: |
+  Please complete the following about the ${ ordinal(i) } bank account:
+fields:
+  - Name of Institution: bankact[i].bank_name
+  - Account Number: bankact[i].act_number
+  - Type of Account: bankact[i].act_type
+  - Current Balance: bankact[i].balance
+    datatype: currency
+   
+---
+question: |
+  Would you like to add another bank account?
+subquestion: |
+  So far you have added these bank accounts: 
+  
+  Institution   |Account Number   |Type   |Balance  
+  --------------|-----------------|-------|-------
+  % for ba in bankact:
+  ${ bankact.item(ba).bank_name } | ${ bankact.item(ba).act_number } | ${ bankact.item(ba).act_type } | ${ bankact.item(ba).balance } 
+  % endfor  
+yesno: bankact.there_is_another
+---
+---
+question: |
+  Do you have any retirement accounts?
+subquestion: |
+  This includes any 401k's, IRA's, Roth IRA's, pensions, or Keogh accounts. 
+yesno: hasretirement
+
+---
+code: |
+  if hasretirement == True:
+    retirement_acts.there_are_any=True
+    retirement_acts.new_item_name = len(retirement_acts)
+  else: 
+   retirement_acts.there_are_any=False
+---
+
+question: |
+  Please complete the following about the ${ ordinal(i) } retirement account:
+fields:
+  - Name of Institution: retirement_acts[i].name
+  - Account Number: retirement_acts[i].act_number
+  - Type of Account: retirement_acts[i].act_type
+  - Current Balance: retirement_acts[i].balance
+    datatype: currency
+   
+---
+question: |
+  Would you like to add another retirement account?
+subquestion: |
+  So far you have added these retirement accounts: 
+  
+  Institution   |Account Number   |Type   |Balance  
+  --------------|-----------------|-------|-------
+  % for ba in retirement_acts:
+  ${ retirement_acts.item(ba).name } | ${ retirement_acts.item(ba).act_number } | ${ retirement_acts.item(ba).act_type } | ${ retirement_acts.item(ba).balance } 
+  % endfor  
+yesno: retirement_acts.there_is_another
+---
+
+---
+question: |
+  Do you have any securities such as mutual funds, stocks, or shares in companies?
+yesno: hassecurities
+
+---
+code: |
+  if hassecurities == True:
+    securities.there_are_any=True
+    securities.new_item_name = len(securities)
+  else: 
+    securities.there_are_any=False
+---
+
+question: |
+  Please complete the following about the ${ ordinal(i) } security:
+fields:
+  - Type: securities[i].type
+  - Issuer: securities[i].issuer
+  - Quantity: securities[i].quant
+  - Current Value: securities[i].cur_val
+    datatype: currency
+   
+---
+question: |
+  Would you like to add another security?
+subquestion: |
+  So far you have added these securities: 
+  
+  Type   |Issuer   |Quantity   |Current Value
+  -------|---------|-----------|-------
+  % for se in securities:
+  ${ securities.item(se).type } | ${ securities.item(se).issuer } | ${ securities.item(se).quant } | ${ securities.item(se).cur_val } 
+  % endfor    
+
+yesno: securities.there_is_another
+---
+question: |
+  Please add the current values for any of your other assets: 
+fields: 
+  - Notes Receivable: notes_receivable
+    required: False
+    datatype: currency
+  - Judgements or Settlements: judg_settle
+    required: False
+    datatype: currency
+  - Life Insurance Cash Value: life_ins
+    required: False
+    datatype: currency
+  - Collectables: collects
+    required: False
+    datatype: currency
+  - Household Furnishings: furnishings
+    required: False
+    datatype: currency
+  - Other: other_specify
+    required: False
+  - Other Value: other_value
+    required: False
+    datatype: currency
+---
+question: |
+  Is anyone holding any assets for you on your behalf?
+fields: 
+  - no label: anyone_else_hold_assets
+    choices: 
+      - Yes
+      - No
+---
+question: |
+  Are you a party to a lawsuit now pending?
+fields: 
+  - no label: party_to_lawsuit
+    choices: 
+      - Yes
+      - No
+---
+question: |
+  Do you have any type of insurance claim pending?
+fields: 
+  - no label: any_insurance_claim
+    choices: 
+      - Yes
+      - No
+---
+question: |
+  Is there any likelihood you will receive an inheritance in the next five years?
+fields: 
+  - no label: any_inheritance_likely
+    choices: 
+      - Yes
+      - No
+---
+question: |
+  Do you have a pending bankruptcy case in U.S. Bankruptcy Court??
+fields: 
+  - no label: bankruptcy_case_pending
+    choices: 
+      - Yes
+      - No
+  - What type of bankruptcy?: bankruptcy_type
+    show if: 
+      variable: 
+        bankruptcy_case_pending
+      is: 
+        "Yes"
+    choices: 
+      - Chapter 13
+      - Chapter 7
+  - What is the case number: bankruptcy_case_no
+    show if: 
+      variable: 
+        bankruptcy_case_pending
+      is: 
+        "Yes"
+---
+question: |
+  Please answer the following about any personal or student loans:
+fields: 
+  - Total Amount Owed: student_loan_amt_owed
+    datatype: currency
+    required: False
+  - Monthly Payment: student_loan_monthly_payment
+    datatype: currency
+    required: False
+  - Name of Lender: student_loan_lender_name
+    required: False
+  - Purpose of Loan: student_loan_purpose
+    required: False
+---
+question: |
+  Please answer the following about any notes payable that you owe:
+fields: 
+  - Total Amount Owed: note_payable_amt_owed
+    datatype: currency
+    required: False
+  - Monthly Payment: note_payable_monthly_payment
+    datatype: currency
+    required: False
+  - Name of Lender: note_payable_lender_name
+    required: False
+  - Purpose of Loan: note_payable_loan_purpose
+    required: False
+---
+question: |
+  Please answer the following about any automobile loans:
+fields: 
+  - Total Amount Owed: auto_loan_amt_owed
+    datatype: currency
+    required: False
+  - Monthly Payment: auto_loan_monthly_payment
+    datatype: currency
+    required: False
+  - Name of Lender: auto_loan_lender_name
+    required: False
+  - Purpose of Loan: auto_loan_purpose
+    required: False
+---
+---
+question: |
+  Please answer the following about any other loan you may have 
+  that you haven not already provided:
+fields: 
+  - Total Amount Owed: other_loan_amt_owed
+    datatype: currency
+    required: False
+  - Monthly Payment: other_loan_monthly_payment
+    datatype: currency
+    required: False
+  - Name of Lender: other_loan_lender_name
+    required: False
+  - Purpose of Loan: other_loan_purpose
+    required: False
+---
+---
+question: |
+  Do you have any credit cards?
+subquestion: |
+  Please answer yes if you have any credit cards such as a Visa, Mastercard, or Discover card. 
+yesno: has_credit_cards
+
+---
+code: |
+  if has_credit_cards == True:
+    credit_cards.there_are_any=True
+    credit_cards.new_item_name = len(credit_cards)
+  else: 
+    credit_cards.there_are_any=False
+---
+
+question: |
+  Please complete the following about the ${ ordinal(i) } credit card:
+fields:
+  - Name of Institution: credit_cards[i].issuer
+  - Account Number: credit_cards[i].account_no
+  - Monthly payment: credit_cards[i].monthly_payment
+    datatype: currency
+  - Credit limit: credit_cards[i].credit_limit
+    datatype: currency
+  - Total amount owed: credit_cards[i].total_amt_owed
+    datatype: currency   
+---
+question: |
+  Would you like to add another credit card?
+yesno: credit_cards.there_is_another
+
+---
+question: |
+  Please complete the following about your gross monthly income, including where possible
+  the source of the income. 
+subquestion: |
+  'Gross income' means the amount you receive *before* taxes or other expenses are taken out. 
+  For example if your salary is $5,000 per month *before* taxes, that would be your 
+  gross salary per month.
+fields:
+  - html: |
+      <hr></hr>
+  - Source of any salary or wages you receive: base_pay_source
+    required: False
+  - Gross amount you receive monthly in salary or wages: base_pay_gross_monthly
+    datatype: currency
+    required: False
+  - html: |
+      <hr></hr>
+  - Source of any monthly commissions or tips you receive: tips_source
+    required: False
+  - Gross amount you receive monthly in commissions or tips: tips_gross_monthly
+    required: False
+    datatype: currency
+  - html: |
+      <hr></hr>
+  - Do you receive Supplemental Security Income or Social Security Disability?: ssi_source
+    default: 'N/A'
+    choices: 
+      - SSI
+      - SSDI
+      - Neither: 'N/A'
+  - How much do you receive monthly from SSI or SSDI?: ssi_ssdi_gross_monthly
+    required: False
+    datatype: currency
+    hide if: 
+      variable: 
+        ssi_source
+      is: 
+        'N/A'
+  - html: |
+      <hr></hr>
+  - Source of any unemployment benefits you receive: unemploy_source
+    required: False
+  - Gross amount you receive monthly in unemployment benefits: unemployment_gross_monthly
+    required: False
+    datatype: currency
+
+---
+question: |
+  Please complete the following about your monthly income (continued):
+subquestion: |
+  Reminder: 'gross income' means the amount you receive *before* taxes or other expenses are taken out. 
+  For example if your salary is $5,000 per month *before* taxes, that would be your 
+  gross salary per month.
+fields:
+  - html: |
+      <hr></hr>
+  - Source of any pension or retirement income you receive: pension_retire_source
+    required: false
+  - Gross amount you receive monthly in pension or retirement: pension_retire_gross_monthly
+    required: False
+    datatype: currency
+  - html: |
+      <hr></hr>
+  - Source of any rental income you receive: rental_income_source
+    required: False
+  - Gross amount you receive monthly in rental income: rental_income_gross_monthly
+    required: False
+    datatype: currency
+  - html: |
+      <hr></hr>
+  - Source of any public assistance income you receive: public_assistance_source
+    required: false
+  - Gross amount you receive monthly in public assistance income: public_assistance_gross_monthly
+    required: False
+    datatype: currency
+  - html: |
+      <hr></hr>
+  - Source of any income in annuities or trusts you receive: annuities_trusts_source
+    required: False
+  - Gross amount you receive monthly in annuities or trusts: annuities_trusts_gross_monthly
+    required: False
+    datatype: currency
+  - html: |
+      <hr></hr>
+  - Source of any income in dividends or interest you receive: dividends_interest_source
+    required: false
+  - Gross amount you receive monthly in dividends or interest: dividends_interest_gross_monthly
+    required: False
+    datatype: currency
+  - html: |
+      <hr></hr>
+  - Source of any income in Social Security you receive: ss_retirement_source
+    required: false
+  - Gross amount you receive monthly in Social Security: ss_retirement_gross_monthly
+    required: False
+    datatype: currency    
+---
+question: |
+  Please complete the following about your monthly income (continued):
+subquestion: |
+  Reminder: 'gross income' means the amount you receive *before* taxes or other expenses are taken out. 
+  For example if your salary is $5,000 per month *before* taxes, that would be your 
+  gross salary per month.
+fields:
+  - html: |
+      <hr></hr>
+  - Source of any income in Veteran's benefits you receive: vet_benefit_source
+    required: false
+  - Gross amount you receive monthly in Veteran's benefits: vet_benefit_gross_monthly
+    required: False
+    datatype: currency
+  - html: |
+      <hr></hr>
+  - Source of any income in contributions from household members you receive: hh_member_contrib_source
+    required: false
+  - Gross amount you receive monthly in household member contributions: hh_member_contrib_gross_monthly
+    required: False
+    datatype: currency
+  - html: |
+      <hr></hr>
+  - Source of any income in royalties you receive: royalties_source
+    required: false
+  - Gross amount you receive monthly in royalties: royalties_gross_monthly
+    required: False
+    datatype: currency
+  - html: |
+      <hr></hr>
+  - Source of any income in disability benefits you receive: disability_benefits_source
+    required: false
+  - Gross amount you receive monthly in disability benefits: disability_gross_monthly
+    required: False
+    datatype: currency
+  - html: |
+      <hr></hr>
+  - Source of any income in worker's compensation benefits you receive: workers_comp_source
+    required: false
+  - Gross amount you receive monthly in worker's compensation benefits: workers_comp_gross_monthly
+    required: False
+    datatype: currency
+  - html: |
+      <hr></hr>
+  - Source of any income from other items not already included: other_source
+    required: false
+  - Gross amount you receive monthly from other sources: other_gross_monthly
+    required: False
+    datatype: currency
+---
+question: |
+  Please complete the following about your monthly living expenses:
+fields:
+  - Rent or mortgage monthly payment: rent_mort_monthly
+    required: False
+    datatype: currency
+  - Home / renter's insurance monthly payment: home_ins_montly
+    required: False
+    datatype: currency
+  - Water bill monthly payment: water_bill_monthly
+    required: False
+    datatype: currency
+  - Electic bill monthly payment: electric_monthly
+    required: False
+    datatype: currency
+  - Heating bill monthly payment: heat_monthly
+    required: False
+    datatype: currency
+  - Telephone monthly payment: phone_monthly
+    required: False
+    datatype: currency
+  - Groceries monthly cost (estimated): groceries_monthly
+    required: False
+    datatype: currency
+  - Clothing monthly cost (estimated): clothing_monthly
+    required: False
+    datatype: currency
+  - Life insurance monthly payment: life_ins_monthly
+    required: False
+    datatype: currency
+  - Auto insurance monthly payment: auto_ins_monthly
+    required: False
+    datatype: currency
+
+---
+question: |
+  Please complete the following about your monthly living expenses (continued):
+fields:
+  - Transportation monthly cost: transpo_monthly
+    required: False
+    datatype: currency
+  - Medical insurance monthly payment (if not deducted from gross pay): med_ins_monthly
+    required: False
+    datatype: currency
+  - Uninsured medical expenses monthly cost: med_expenses_monthly
+    required: False
+    datatype: currency
+---
+question: |
+  If you have any other monthly living expenses that were not previously included, 
+  please include them here:
+fields:
+  - Description of other monthly expense: other_exp_1
+    required: False
+  - Other monthly expense: other_exp_1_monthly
+    required: False
+    datatype: currency
+  - Description of other monthly expense: other_exp_2
+    required: False
+  - Other monthly expense: other_exp_2_monthly
+    required: False
+    datatype: currency
+---
+question: |
+  Please complete the following about your monthly deductions from your gross pay:
+fields:
+  - Federal taxes: fed_tax_ded_monthly
+    required: False
+    datatype: currency
+  - State taxes: state_tax_ded_monthly
+    required: False
+    datatype: currency
+  - Medical insurance: med_ins_ded_monthly
+    required: False
+    datatype: currency
+  - FICA and Medicare: fica_medicare_ded_monthly
+    required: False
+    datatype: currency
+  - Union dues: union_dues_ded_monthly
+    required: False
+    datatype: currency
+  - Life insurance: life_ins_ded_monthly
+    required: False
+    datatype: currency
+  - Disability insurance: disability_ins_ded_monthly
+    required: False
+    datatype: currency
+  - Retirement contributions: retirement_ded_monthly
+    required: False
+    datatype: currency
+  - Any other monthly deductions: other_ded_monthly
+    required: False
+    datatype: currency    
+
+---
+code: |
+  
+  if client.marital_status == "No":
+    client.spouse_birthdate = "N/A"
+    client.spouse_name = "N/A"
+    is_spouse_employed = False
+    spouse_monthly_income = "N/A"
+    spouse_monthly_income_source = "N/A"
+    
+    
+---
+code: |
+  send_me_not_dta = False
+  other_parent_reason = False    
+    
+---
+question: |
+  Please select the reason you want ___ to review your case:
+fields: 
+  - no label: reason_to_review 
+    input type: radio
+    choices:
+      - I do not owe past due child support: not_owe_past_due_cs
+      - I think the amount of past-due support DOR says I owe is wrong: past_due_cs_wrong
+      - DOR told me or my employer that the amount of child support I need to pay is going up by 25%. This is a hardship for me.: twfv_hardship
+      - I get public assistance benefits and I have a child who receives SSI.: pub_assist_ssi
+      - DOR took money from my bank account and the money came from from my government benefits (such as SSI, TAFDC, TANF or EAEDC): took_benefits
+      - DOR took money from my bank account and the money does not belong to me. I am the court appointed conservator or guardian for money that belongs to someone else. : not_my_money
+      - Other: other_reason_wrong
+  - The correct amount of past due child support is: past_due_correct_amt
+    datatype: currency
+    show if: 
+      variable: 
+        reason_to_review
+      is: 
+        past_due_cs_wrong
+  - Please explain why you chose 'other': other_reason_for_review
+    datatype: area
+    show if: 
+      variable: 
+        reason_to_review
+      is: 
+        other
+---
+---
+question: |
+  Please select all that apply
+subquestion: |
+  (Bank Levy Form)
+fields: 
+  - no label: bank_levy_dict
+    datatype: checkboxes
+    choices: 
+      - The amount taken from my bank account was more than I owe. : bld_more_than_owe
+      - Some or all of the funds levied are exempt because they come from federal or state benefits, such as Suplemental Security Income (SSI); Transitional Assistance to Families with Dependent Children (TAFDC); Transitional Aid to Needy Families (TANF); or Emergency Aid for Elderly and Disabled Residents and Children (EAEDC). : bld_bene_taken
+      - The seized funds should be exempt from levy because the funds do not belong to you or because of other reasons stated below. For example, you are the court appointed conservator or guardian for funds belonging to another individual. Joint account holders, like husband and wife, or child and parent, or parent and significant other, are not exempted under this section. : bld_not_my_money
+      - The levy of my account causes me a severe hardship : bld_hardship
+  - What is the amount of past-due support?: blrf_past_due_correct_amt
+    datatype: currency
+    show if: 
+      variable: 
+        bank_levy_dict['bld_more_than_owe']
+      is: 
+        True
+---
+code: |
+  if bank_levy_dict['bld_more_than_owe'] == True: 
+    blrf_wrong_amt_taken = '_X_'
+  else: 
+    blrf_wrong_amt_taken = '___'
+
+  if bank_levy_dict['bld_bene_taken'] == True: 
+    blrf_benefits_taken = '_X_'
+  else: 
+    blrf_benefits_taken = '___'
+
+  if bank_levy_dict['bld_not_my_money'] == True: 
+    blrf_money_not_mine_taken = '_X_'
+  else: 
+    blrf_money_not_mine_taken = '___'
+
+
+  if bank_levy_dict['bld_hardship'] == True: 
+    blrf_hardship = '_X_'
+  else: 
+    blrf_hardship = '___'
+---
+mandatory: true
+question: |
+  Here is your document.
+attachments:
+  - name: Statement of Financial Condition
+    filename: statement_of_financial_condition
+    docx template file: sofc3a.docx
+    valid formats:
+      - pdf
+      - docx
+  - name: Request for Administrative Review
+    filename: sreq_fr_ad_rev
+    docx template file: req_fr_ad_rev.docx
+    valid formats:
+      - pdf
+      - docx
+  - name: Bank Levy Response
+    filename: bank_levy
+    docx template file: bank_levy.docx
+    valid formats:
+      - pdf
+      - docx
+
+      
+      
+      
+      
